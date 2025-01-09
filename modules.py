@@ -32,17 +32,33 @@ class ResidualBlock (nn.Module):
         channel_up_stride = config.channel_up_stride
         channel_up_padding = config.channel_up_padding
         
-        self.block = nn.Sequential (
+       # self.block = nn.Sequential (
+       #     GroupNorm (in_channels),
+       #     Swish (),
+       #     nn.Conv2d (in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding),
+       #     GroupNorm (out_channels),
+       #     Swish ()
+       # )
+       # self.conv_projection = nn.Conv2d (out_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding) # Project back into residual pathway
+       # self.conv_projection.VQGAN_SKIP_CONNECTION_SCALE_INIT = 1
+
+        layers = [
             GroupNorm (in_channels),
             Swish (),
             nn.Conv2d (in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding),
             GroupNorm (out_channels),
-            Swish (),
-            nn.Conv2d (out_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding) # Project back into residual pathway
-        )
+            Swish ()
+        ]
+        self.conv_projection = nn.Conv2d (out_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding) # Project back into residual pathway
+        # conv_proj is the final projection layer only IF in_channels = out_channels
+        if in_channels == out_channels:
+            self.conv_projection.SKIP_CONNECTION_SCALE_INIT = 1
+        layers.append (self.conv_projection)
+        self.block = nn.Sequential (*layers)
 
         if in_channels != out_channels:
             self.channel_up = nn.Conv2d (in_channels, out_channels, kernel_size=channel_up_kernel_size, stride=channel_up_stride, padding=channel_up_padding)
+            self.channel_up.SKIP_CONNECTION_SCALE_INIT = 1
     
     def forward (self, X):
 
@@ -52,9 +68,14 @@ class ResidualBlock (nn.Module):
             return X + self.block(X)
 
 class UpSampleBlock (nn.Module):
-    def __init__(self, channels, factor=2.0):
+    def __init__(self, channels, config, factor=2):
         super().__init__()
-        self.conv = nn.Conv2d (channels, channels, kernel_size=3, stride=1, padding=1)
+        
+        kernel_size = config.up_sample_kernel_size
+        stride = config.up_sample_stride
+        padding = config.up_sample_padding
+
+        self.conv = nn.Conv2d (channels, channels, kernel_size=kernel_size, stride=stride, padding=padding)
         self.factor = factor
     def forward (self, X):
         X = F.interpolate (X, scale_factor=self.factor)
@@ -96,6 +117,8 @@ class SelfAttention (nn.Module):
         # attention
         self.conv_attention = nn.Conv2d (channels, 3 * channels, kernel_size=att_kernel_size, stride=att_stride, padding=att_padding)
         self.conv_projection = nn.Conv2d (channels, channels, kernel_size=proj_kernel_size, stride=proj_stride, padding=proj_padding)
+        # scale init shenanigans
+        self.conv_projection.SKIP_CONNECTION_SCALE_INIT = 1
     
     def forward (self, X):
         B, C, H, W = X.size()
