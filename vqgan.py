@@ -9,13 +9,9 @@ from dataclasses import dataclass
 
 import inspect
 
-@dataclass
-class VQGanConfig:
-    pass
-
 
 class VQGan (nn.Module):
-    def __init__(self, encoder_config, quantizer_config, decoder_config, config):
+    def __init__(self, encoder_config, quantizer_config, decoder_config):
         super().__init__()
         self.encoder = Encoder (encoder_config)
         
@@ -106,11 +102,11 @@ class VQGan (nn.Module):
     # sort of a force against the optimization that pulls down the weights and makes the network use more of the weights, distributing the task across multiple channels if you would,
     # to achieve the activations, basically regularization
     
-    def configure_optimizers (self, weight_decay, learning_rate, device, optimizer_config_name):
+    def configure_optimizers (self, weight_decay, learning_rate, device):
         # start with all parameters that require gradients
         param_dict = {pn:p for pn,p in self.named_parameters()}
         param_dict = {pn:p for pn,p in param_dict.items() if p.requires_grad}
-
+        
         # create optim groups. Any parameter that is 2D will be weight decayed, otherwise no.
         # i.e. all tensors in matmul + embeddings decay, all biases and layer norms don't
         decay_params = [p for pn, p in param_dict.items() if p.dim() >= 2]
@@ -124,7 +120,7 @@ class VQGan (nn.Module):
         num_decay_params = sum (p.numel () for p in decay_params)
         num_no_decay_params = sum (p.numel () for p in no_decay_params)
 
-        print (f"optimizer_config:{optimizer_config_name}:\n num decayed parameter tensors:{len(decay_params)} with {num_decay_params} parameters")
+        print (f"optimizer_configuration for VQGAN model:\n num decayed parameter tensors:{len(decay_params)} with {num_decay_params} parameters")
         print (f"num non-decayed parameter tensors:{len(no_decay_params)} with {num_no_decay_params} parameters")
 
         # Create AdamW optimizer and use the fused version if it is available
