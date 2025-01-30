@@ -5,10 +5,12 @@ from dataclasses import dataclass
 
 @dataclass
 class QuantizerConfig:
-    vocab_size : int = 2048
+    vocab_size : int = 8192
     # n_embd has to be same as encoder output latent_dim since we find difference
     n_embd : int = 1024
     commitment_cost : int = 0.25 
+
+    latent_resolution : int = 16
 
 class Quantizer (nn.Module):
     def __init__(self, config):
@@ -34,7 +36,8 @@ class Quantizer (nn.Module):
 
         # find difference for each latent for each codebook vector so you have BHW, VS differences
         distances = torch.sum(ze_flat**2, dim=1, keepdim=True) + torch.sum(self.codebook.weight**2, dim=1) - 2*torch.matmul(ze_flat, self.codebook.weight.t())
-
+                        # 256, 1                                           #  8192                          # 256, 8192
+                        # 256, 8192    - 2 * (256, 8192)
         encoding_indices = torch.argmin (distances, dim=1) # (BHW)
 
         # this is zq
